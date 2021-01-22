@@ -1,4 +1,4 @@
-import sys, redis, uuid,json
+import sys, redis, uuid,json,ast
 
 from twisted.internet import reactor, ssl
 from twisted.web.server import Site
@@ -19,16 +19,21 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
 
     def onMessage(self, payload, isBinary):
         if not isBinary:
-            print("msg")
-            if (msg := payload.decode("utf-8")).startswith("@:"):
+            received_data = ast.literal_eval(payload.decode("utf-8"))
+            print("msg",received_data)
+            if (received_data['type'] == 'broadcast'):
                 #Broadcast message
                 send_payload = {
                     'type': 'message',
-                    'message': msg
+                    'message': received_data['message']
                 }
                 self.factory.broadcast(json.dumps(send_payload))
+            elif received_data['type'] == 'client':
+                payload = 'Cheese'
+                self.factory.send_client(received_data['client_id'],payload)
 
     def connectionLost(self, reason):
+        print("Connection Lost")
         WebSocketServerProtocol.connectionLost(self, reason)
         self.factory.unregister(self)
 
@@ -58,12 +63,15 @@ class BroadcastServerFactory(WebSocketServerFactory):
             client.sendMessage(json.dumps(payload).encode())
             payload = {
                 'type' : 'client_list',
-                'clients':ids
+                'clients':list(self.clients.keys())
             }
-            print(self.clients)
+            print('The Clients',self.clients)
             for cid in self.clients:
                 print(cid)
-                self.clients[cid].sendMessage(json.dumps(payload).encode())
+                try:
+                    self.clients[cid].sendMessage(json.dumps(payload).encode())
+                except Exception as e:
+                    print(e)
             #print("Here are the clients", self.clients, ids)
 
     def unregister(self, client):
@@ -78,6 +86,9 @@ class BroadcastServerFactory(WebSocketServerFactory):
         print("broadcasting message '{}' to {} clients ...".format(msg, len(self.clients)))
         for cid in self.clients:
             self.clients[cid].sendMessage(msg.encode('utf-8'))
+
+    def send_client(self,client_id,data):
+        print('sending to ',client_id)
 
 if __name__ == "__main__":
     log.startLogging(sys.stdout)
