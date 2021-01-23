@@ -34,13 +34,17 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                     'message': 'Cheese'
                 }
                 self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
+            elif received_data['type'] == 'create_room':
+                room_list = self.factory.create_room(received_data['client_id'],received_data['name'])
             elif received_data['type'] == 'name':
-                name = self.factory.set_name(received_data['client_id'],received_data['name'])
+                self.factory.set_name(received_data['client_id'],received_data['name'])
                 send_payload = {
                     'type': 'set_name',
-                    'message': name
+                    'message': received_data['name']
                 }
                 self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
+                #Broadcast client list now a name is set
+                self.factory.send_client_list()
 
     def connectionLost(self, reason):
         print("Connection Lost")
@@ -66,24 +70,32 @@ class BroadcastServerFactory(WebSocketServerFactory):
             while (cid := str(uuid.uuid4())) in ids:
                 pass
             print("registered client {} with id {}".format(client.peer, cid))
-            self.clients[cid] = client
+            self.clients[cid] = dict()
+            self.clients[cid]['client'] = client
+            self.clients[cid]['name'] = None
             payload = {
                 'type': 'register',
                 'yourid':cid
             }
             client.sendMessage(json.dumps(payload).encode())
-            payload = {
-                'type' : 'client_list',
-                'clients':list(self.clients.keys())
-            }
-            print('The Clients',self.clients)
-            for cid in self.clients:
-                print(cid)
-                try:
-                    self.clients[cid].sendMessage(json.dumps(payload).encode())
-                except Exception as e:
-                    print(e)
             #print("Here are the clients", self.clients, ids)
+
+    def send_client_list(self):
+        #Get the clients and create
+        clients_list = list(self.clients.keys())
+        print('client list here',clients_list)
+        clients_data = [{'id':cli, 'name':self.clients[cli]['name']} for cli in clients_list]
+        payload = {
+            'type' : 'client_list',
+            'clients': json.dumps(clients_data)
+        }
+        print('The Clients',self.clients)
+        for cid in self.clients:
+            print(cid)
+            try:
+                self.clients[cid]['client'].sendMessage(json.dumps(payload).encode())
+            except Exception as e:
+                print(e)
 
     def unregister(self, client):
         if client in self.clients:
@@ -95,15 +107,47 @@ class BroadcastServerFactory(WebSocketServerFactory):
         # for c in self.clients:
         #     c.sendMessage(msg.encode('utf-8'))
         print("broadcasting message '{}' to {} clients ...".format(msg, len(self.clients)))
-        for cid in self.clients:
-            self.clients[cid].sendMessage(msg.encode('utf-8'))
+        cids = self.clients.keys()
+        for cid in cids:
+            print('here is a client', self.clients[cid])
+            self.clients[cid]['client'].sendMessage(msg.encode('utf-8'))
 
     def send_client(self,client_id,data):
         print('sending to ',client_id)
-        self.clients[client_id].sendMessage(data.encode('utf-8'))
+        self.clients[client_id]['client'].sendMessage(data.encode('utf-8'))
 
     def set_name(self,client_id,name):
         print('set name',self.clients)
+        self.clients[client_id]['name'] = name
+
+    def create_room(self,client_id,room):
+        rooms = self.rooms.keys()
+        if room not in rooms:
+            self.rooms[room] = dict()
+            self.rooms[room]['owner'] = client_id
+            self.rooms[room]['name'] = room
+            self.rooms[room]['members'] = []
+            self.rooms[room]['members'].append(client_id)
+            cids = self.clients.keys()
+            room_list = [ self.rooms[k] for k in self.rooms.keys()]
+            send_payload = {
+                'type' : 'room_list',
+                'rooms': json.dumps(room_list)
+            }
+            for cid in cids:
+                try:
+                    self.clients[cid]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
+                except Exception as e:
+                    print(e)
+        else:
+            #Send a failure notification
+            send_payload = {
+                'type' : 'room_failure',
+                'reason': 'Room already exists'
+            }
+            self.clients[client_id]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
+
+
 
 
 if __name__ == "__main__":
