@@ -45,12 +45,14 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
                 #Broadcast client list now a name is set
                 self.factory.send_client_list()
+                #Broadcast room list
+                self.factory.send_room_list()
             elif received_data['type'] == 'enter_room':
-                self.factory.send_room(enter_room,received_data['client_id'],received_data['name'])
+                self.factory.enter_room(received_data['client_id'],received_data['name'])
 
     def connectionLost(self, reason):
-        print("Connection Lost")
-        WebSocketServerProtocol.connectionLost(self, reason)
+        print("Connection Lost", reason)
+        #WebSocketServerProtocol.connectionLost(self, reason)
         self.factory.unregister(self)
 
 
@@ -102,12 +104,16 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
     #The connection is closed tidy up
     def unregister(self, client):
+        client_id = None
         all_clients = list(self.clients)
         for cli in all_clients:
             if client == self.clients[cli]['client']:
+                client_id = cli
                 del self.clients[cli]
-        bojo = list(self.clients)
-        
+        #For now (for testing purposes destroy all the rooms)
+        #Timer will be used to closed rooms when implemented
+        self.rooms = {}
+
 
     def broadcast(self, msg):
         # print("broadcasting message '{}' to {} clients ...".format(msg, len(self.clients)))
@@ -134,21 +140,11 @@ class BroadcastServerFactory(WebSocketServerFactory):
             self.rooms[room]['owner'] = client_id
             self.rooms[room]['name'] = room
             self.rooms[room]['members'] = []
-            self.rooms[room]['members'].append(client_id)
+            #self.rooms[room]['members'].append(client_id)
             self.timers[room] = dict()
-            self.timers[room]['timer'] = threading.Timer(10,self.close_room,args=room)
+            self.timers[room]['timer'] = threading.Timer(10,self.close_room,args=[room])
             self.timers[room]['timer'].start()
-            cids = self.clients.keys()
-            room_list = [ self.rooms[k] for k in self.rooms.keys()]
-            send_payload = {
-                'type' : 'room_list',
-                'rooms': json.dumps(room_list)
-            }
-            for cid in cids:
-                try:
-                    self.clients[cid]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
-                except Exception as e:
-                    print(e)
+            self.send_room_list()
         else:
             #Send a failure notification
             send_payload = {
@@ -157,21 +153,35 @@ class BroadcastServerFactory(WebSocketServerFactory):
             }
             self.clients[client_id]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
 
-    def enter_room(client_id,room_name):
-        room = self.rooms['room_name']
+    def send_room_list(self):
+            room_list = [ self.rooms[k] for k in self.rooms.keys()]
+            send_payload = {
+                'type' : 'room_list',
+                'rooms': json.dumps(room_list)
+            }
+            cids = self.clients.keys()
+            for cid in cids:
+                try:
+                    self.clients[cid]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
+                except Exception as e:
+                    print(e)
+
+    def enter_room(self,client_id,room_name):
+        room = self.rooms[room_name]
         if client_id not in room['members']:
             room['members'].append(client_id)
             send_payload = {
                 'type' : 'room_entrance',
-                'client': { 'id':client_id, 'name':self.clients[client_id]['name']}
+                'client': { 'id':client_id, 'name':self.clients[client_id]['name']},
+                'name' : room_name
             }
-            send_room(room,send_payload)
+            self.send_room(room,send_payload)
 
     #Send data to a room
-    def send_room(room,payload):
+    def send_room(self,room,payload):
         for cid in room['members']:
             try:
-                self.clients[cid]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
+                self.clients[cid]['client'].sendMessage(json.dumps(payload).encode('utf-8'))
             except Exception as e:
                 print(e)
 
