@@ -29,8 +29,18 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 }
                 self.factory.broadcast(json.dumps(send_payload))
             elif received_data['type'] == 'client':
-                payload = 'Cheese'
-                self.factory.send_client(received_data['client_id'],payload)
+                send_payload = {
+                    'type': 'message',
+                    'message': 'Cheese'
+                }
+                self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
+            elif received_data['type'] == 'name':
+                name = self.factory.set_name(received_data['client_id'],received_data['name'])
+                send_payload = {
+                    'type': 'set_name',
+                    'message': name
+                }
+                self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
 
     def connectionLost(self, reason):
         print("Connection Lost")
@@ -42,6 +52,7 @@ class BroadcastServerFactory(WebSocketServerFactory):
     def __init__(self, url):
         WebSocketServerFactory.__init__(self, url)
         self.clients = {}
+        self.rooms = {}
 
     def register(self, client):
         # ids = list(self.clients.keys())
@@ -89,6 +100,11 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
     def send_client(self,client_id,data):
         print('sending to ',client_id)
+        self.clients[client_id].sendMessage(data.encode('utf-8'))
+
+    def set_name(self,client_id,name):
+        print('set name',self.clients)
+
 
 if __name__ == "__main__":
     log.startLogging(sys.stdout)
