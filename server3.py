@@ -6,6 +6,10 @@ from twisted.web.static import File
 from twisted.python import log
 from autobahn.twisted.websocket import WebSocketServerFactory, WebSocketServerProtocol, listenWS
 from autobahn.twisted.resource import WebSocketResource
+from resettimer import TimerReset
+
+#The timeout value in seconds to keep a room active
+ROOM_TIMEOUT_VALUE = 10
 
 # TUTORIAL https://medium.com/python-in-plain-english/identify-websocket-clients-with-autobahn-twisted-and-python-3f90b4c135d4
 
@@ -51,6 +55,22 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 self.factory.enter_room(received_data['client_id'],received_data['name'])
             elif received_data['type'] == 'exit_room':
                 self.factory.exit_room(received_data['client_id'],received_data['name'])
+            elif received_data['type'] == 'message_room':
+                #Update timer
+                #timer = self.factory.timers[received_data['name']]['timer']
+                #print('timer here', timer)
+                #timer.start()
+                #self.factory.timers[received_data['name']]['timer']  = None
+                #self.factory.timers[received_data['name']]['timer'] = threading.Timer(10,self.factory.close_room,args=[received_data['name']])
+                self.factory.timers[received_data['name']]['timer'].reset()
+                send_payload = {
+                    'type' : 'room_message',
+                    'client': { 'id':received_data['client_id'] , 'name':self.factory.clients[received_data['client_id']]['name']},
+                    'message':  received_data['message']
+                }
+                room = self.factory.rooms[received_data['name']]
+                self.factory.send_room(room,send_payload)
+
 
 
     def connectionLost(self, reason):
@@ -145,7 +165,8 @@ class BroadcastServerFactory(WebSocketServerFactory):
             self.rooms[room]['members'] = []
             #self.rooms[room]['members'].append(client_id)
             self.timers[room] = dict()
-            self.timers[room]['timer'] = threading.Timer(10,self.close_room,args=[room])
+            #self.timers[room]['timer'] = threading.Timer(10,self.close_room,args=[room])
+            self.timers[room]['timer'] = TimerReset(ROOM_TIMEOUT_VALUE,self.close_room,args=[room])
             self.timers[room]['timer'].start()
             self.send_room_list()
         else:
@@ -206,6 +227,9 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
     def close_room(self,room):
         print('Closing Room: ', room)
+        del self.rooms[room]
+        del self.timers[room]
+        self.send_room_list()
 
 
 if __name__ == "__main__":

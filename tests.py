@@ -4,7 +4,7 @@ from selenium import webdriver
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.chrome.options import Options
-import sys, random, string
+import sys, random, string, time
 
 driver = webdriver.Firefox()
 driver.implicitly_wait(100)
@@ -48,6 +48,13 @@ def test_rooms():
     driver.find_element_by_id("Room A").click()
     driver.switch_to_window(driver.window_handles[1])
     driver.find_element_by_id("Room A").click()
+
+    #Send some messages
+    for i in range(0,20):
+        time.sleep(2)
+        driver.find_element_by_id("chatmessage").send_keys('Test')
+        driver.find_element_by_id("send-message").click()
+
 
 
 
