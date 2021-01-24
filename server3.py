@@ -49,6 +49,9 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 self.factory.send_room_list()
             elif received_data['type'] == 'enter_room':
                 self.factory.enter_room(received_data['client_id'],received_data['name'])
+            elif received_data['type'] == 'exit_room':
+                self.factory.exit_room(received_data['client_id'],received_data['name'])
+
 
     def connectionLost(self, reason):
         print("Connection Lost", reason)
@@ -173,7 +176,8 @@ class BroadcastServerFactory(WebSocketServerFactory):
             send_payload = {
                 'type' : 'room_entrance',
                 'client': { 'id':client_id, 'name':self.clients[client_id]['name']},
-                'name' : room_name
+                'name' : room_name,
+                'members' : [ { 'id' : memb ,'name':self.clients[memb]['name'] } for memb in room['members']]
             }
             self.send_room(room,send_payload)
 
@@ -184,6 +188,20 @@ class BroadcastServerFactory(WebSocketServerFactory):
                 self.clients[cid]['client'].sendMessage(json.dumps(payload).encode('utf-8'))
             except Exception as e:
                 print(e)
+
+    def exit_room(self,client_id,room_name):
+        room = self.rooms[room_name]
+        if client_id in room['members']:
+            send_payload = {
+                'type' : 'room_exit',
+                'client': { 'id':client_id, 'name':self.clients[client_id]['name']},
+                'name' : room_name,
+                'members' : [ { 'id' : memb ,'name':self.clients[memb]['name'] } for memb in room['members']]
+            }
+            self.send_room(room,send_payload)
+            #Now remove the member
+            room['members'].remove(client_id)
+
 
 
     def close_room(self,room):
