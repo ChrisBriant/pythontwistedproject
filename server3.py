@@ -11,6 +11,8 @@ from resettimer import TimerReset
 #The timeout value in seconds to keep a room active
 ROOM_TIMEOUT_VALUE = 10
 
+## TODO:  Add controls for when a message is sent to a room not in existance
+
 # TUTORIAL https://medium.com/python-in-plain-english/identify-websocket-clients-with-autobahn-twisted-and-python-3f90b4c135d4
 
 # Source: https://stackoverflow.com/questions/29951718/autobahn-sending-user-specific-and-broadcast-messages-from-external-application
@@ -62,14 +64,15 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 #timer.start()
                 #self.factory.timers[received_data['name']]['timer']  = None
                 #self.factory.timers[received_data['name']]['timer'] = threading.Timer(10,self.factory.close_room,args=[received_data['name']])
-                self.factory.timers[received_data['name']]['timer'].reset()
-                send_payload = {
-                    'type' : 'room_message',
-                    'client': { 'id':received_data['client_id'] , 'name':self.factory.clients[received_data['client_id']]['name']},
-                    'message':  received_data['message']
-                }
-                room = self.factory.rooms[received_data['name']]
-                self.factory.send_room(room,send_payload)
+                if received_data['name'] in self.factory.rooms.keys():
+                    self.factory.timers[received_data['name']]['timer'].reset()
+                    send_payload = {
+                        'type' : 'room_message',
+                        'client': { 'id':received_data['client_id'] , 'name':self.factory.clients[received_data['client_id']]['name']},
+                        'message':  received_data['message']
+                    }
+                    room = self.factory.rooms[received_data['name']]
+                    self.factory.send_room(room,send_payload)
 
 
 
@@ -225,10 +228,18 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
 
 
-    def close_room(self,room):
-        print('Closing Room: ', room)
-        del self.rooms[room]
-        del self.timers[room]
+    def close_room(self,room_name):
+        print('Closing Room: ', room_name)
+        #Message the users in the room to make it exit
+        room = self.rooms[room_name]
+        print('Room members are ', room['members'])
+        for client_id in room['members']:
+            send_payload = {
+                'type' : 'destroy_room',
+            }
+            self.send_room(room,send_payload)
+        del self.rooms[room_name]
+        del self.timers[room_name]
         self.send_room_list()
 
 

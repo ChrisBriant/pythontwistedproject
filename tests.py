@@ -50,7 +50,7 @@ def test_rooms():
     driver.find_element_by_id("Room A").click()
 
     #Send some messages
-    for i in range(0,20):
+    for i in range(0,5):
         time.sleep(2)
         driver.find_element_by_id("chatmessage").send_keys('Test')
         driver.find_element_by_id("send-message").click()
