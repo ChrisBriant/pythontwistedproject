@@ -49,11 +49,35 @@ def test_rooms():
     driver.switch_to_window(driver.window_handles[1])
     driver.find_element_by_id("Room A").click()
 
-    #Send some messages
-    for i in range(0,5):
-        time.sleep(2)
-        driver.find_element_by_id("chatmessage").send_keys('Test')
-        driver.find_element_by_id("send-message").click()
+
+def test_room_privatemessage():
+    #Create three users
+    for i in range(0,2):
+        driver.execute_script('window.open("");')
+        driver.get('http://localhost:3000/')
+        letters = string.ascii_letters
+        name = ''.join(random.choice(letters) for i in range(6))
+        driver.find_element_by_id("name").send_keys(name)
+        driver.find_element_by_id("sendname").click()
+        driver.switch_to_window(driver.window_handles[-1])
+    driver.get('http://localhost:3000/')
+    letters = string.ascii_letters
+    name = ''.join(random.choice(letters) for i in range(6))
+    driver.find_element_by_id("name").send_keys(name)
+    driver.find_element_by_id("sendname").click()
+    #Create one room and join three
+    driver.switch_to_window(driver.window_handles[0])
+    driver.find_element_by_id("room-name").send_keys('Room A')
+    driver.find_element_by_id("sendroom").click()
+    for i in range(0,3):
+        driver.switch_to_window(driver.window_handles[i])
+        driver.find_element_by_id("Room A").click()
+
+    # #Send some messages
+    # for i in range(0,5):
+    #     time.sleep(2)
+    #     driver.find_element_by_id("chatmessage").send_keys('Test')
+    #     driver.find_element_by_id("send-message").click()
 
 
 
@@ -66,3 +90,5 @@ if __name__ == '__main__':
         test_set_name()
     elif sys.argv[1] == 'test_rooms':
         test_rooms()
+    elif sys.argv[1] == 'test_room_privatemessage':
+        test_room_privatemessage()

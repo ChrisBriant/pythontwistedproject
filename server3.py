@@ -9,7 +9,7 @@ from autobahn.twisted.resource import WebSocketResource
 from resettimer import TimerReset
 
 #The timeout value in seconds to keep a room active
-ROOM_TIMEOUT_VALUE = 10
+ROOM_TIMEOUT_VALUE = 120
 
 ## TODO:  Add controls for when a message is sent to a room not in existance
 
@@ -35,9 +35,18 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 }
                 self.factory.broadcast(json.dumps(send_payload))
             elif received_data['type'] == 'client':
+                #Currently not used
                 send_payload = {
                     'type': 'message',
                     'message': 'Cheese'
+                }
+                self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
+            elif received_data['type'] == 'room_pm':
+                print('RECEIVED DATA', received_data)
+                send_payload = {
+                    'type': 'in_room_pm',
+                    'message': received_data['message'],
+                    'sender' : received_data['sender']
                 }
                 self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
             elif received_data['type'] == 'create_room':
