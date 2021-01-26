@@ -80,6 +80,50 @@ def test_room_privatemessage():
     #     driver.find_element_by_id("send-message").click()
 
 
+def test_create_room():
+    driver.execute_script('window.open("");')
+    driver.switch_to_window(driver.window_handles[-1])
+    driver.get('http://localhost:3000/')
+    letters = string.ascii_letters
+    name = ''.join(random.choice(letters) for i in range(6))
+    driver.find_element_by_id("name").send_keys(name)
+    driver.find_element_by_id("sendname").click()
+
+
+def test_joinandrejoin_room():
+    #Open four sessions
+    for i in range(0,3):
+        driver.execute_script('window.open("");')
+        driver.get('http://localhost:3000/')
+        letters = string.ascii_letters
+        name = ''.join(random.choice(letters) for i in range(6))
+        driver.find_element_by_id("name").send_keys(name)
+        driver.find_element_by_id("sendname").click()
+        driver.switch_to_window(driver.window_handles[-1])
+    driver.get('http://localhost:3000/')
+    letters = string.ascii_letters
+    name = ''.join(random.choice(letters) for i in range(6))
+    driver.find_element_by_id("name").send_keys(name)
+    driver.find_element_by_id("sendname").click()
+
+    #Create two rooms
+    driver.switch_to_window(driver.window_handles[0])
+    driver.find_element_by_id("room-name").send_keys('Room A')
+    driver.find_element_by_id("sendroom").click()
+    driver.switch_to_window(driver.window_handles[2])
+    driver.find_element_by_id("room-name").send_keys('Room B')
+    driver.find_element_by_id("sendroom").click()
+
+    #First two windows open room a
+    driver.switch_to_window(driver.window_handles[0])
+    driver.find_element_by_id("Room A").click()
+    driver.switch_to_window(driver.window_handles[1])
+    driver.find_element_by_id("Room A").click()
+    #Second exits and joins Room B
+    driver.find_element_by_id("exit").click()
+    driver.find_element_by_id("Room B").click()
+    driver.switch_to_window(driver.window_handles[2])
+    driver.find_element_by_id("Room B").click()
 
 
 
@@ -92,3 +136,7 @@ if __name__ == '__main__':
         test_rooms()
     elif sys.argv[1] == 'test_room_privatemessage':
         test_room_privatemessage()
+    elif sys.argv[1] == 'test_create_room':
+        test_create_room()
+    elif sys.argv[1] == 'test_joinandrejoin_room':
+        test_joinandrejoin_room()

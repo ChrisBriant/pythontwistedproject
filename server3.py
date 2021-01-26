@@ -43,9 +43,10 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
             elif received_data['type'] == 'room_pm':
                 print('RECEIVED DATA', received_data)
+                message = received_data['message'].split(':')[1]
                 send_payload = {
                     'type': 'in_room_pm',
-                    'message': received_data['message'],
+                    'message': message,
                     'sender' : received_data['sender']
                 }
                 self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
@@ -68,11 +69,6 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 self.factory.exit_room(received_data['client_id'],received_data['name'])
             elif received_data['type'] == 'message_room':
                 #Update timer
-                #timer = self.factory.timers[received_data['name']]['timer']
-                #print('timer here', timer)
-                #timer.start()
-                #self.factory.timers[received_data['name']]['timer']  = None
-                #self.factory.timers[received_data['name']]['timer'] = threading.Timer(10,self.factory.close_room,args=[received_data['name']])
                 if received_data['name'] in self.factory.rooms.keys():
                     self.factory.timers[received_data['name']]['timer'].reset()
                     send_payload = {
@@ -99,11 +95,6 @@ class BroadcastServerFactory(WebSocketServerFactory):
         self.timers = {}
 
     def register(self, client):
-        # ids = list(self.clients.keys())
-        # if client not in self.clients:
-        #     print("registered client {}".format(client.peer))
-        #     self.clients.append(client)
-        #     print("Here are the clients", self.clients, ids)
         registered = [self.clients[i] for i in list(self.clients.keys())]
         ids = list(self.clients.keys())
         if client not in registered:
@@ -113,12 +104,12 @@ class BroadcastServerFactory(WebSocketServerFactory):
             self.clients[cid] = dict()
             self.clients[cid]['client'] = client
             self.clients[cid]['name'] = None
+            self.clients[cid]['room'] = None
             payload = {
                 'type': 'register',
                 'yourid':cid
             }
             client.sendMessage(json.dumps(payload).encode())
-            #print("Here are the clients", self.clients, ids)
 
     def send_client_list(self):
         #Get the clients and create
@@ -144,16 +135,17 @@ class BroadcastServerFactory(WebSocketServerFactory):
         for cli in all_clients:
             if client == self.clients[cli]['client']:
                 client_id = cli
+                #Notify room
+                self.exit_room(client_id,self.clients[client_id]['room'])
                 del self.clients[cli]
+
         #For now (for testing purposes destroy all the rooms)
         #Timer will be used to closed rooms when implemented
+        #!!!!!!!!!!!!!!!! IMPORTANT BELOW MUST BE REMOVED IN PRODUCTION FOR IT TO WORK !!!!!!!!!!!!!!!# 
         self.rooms = {}
 
 
     def broadcast(self, msg):
-        # print("broadcasting message '{}' to {} clients ...".format(msg, len(self.clients)))
-        # for c in self.clients:
-        #     c.sendMessage(msg.encode('utf-8'))
         print("broadcasting message '{}' to {} clients ...".format(msg, len(self.clients)))
         cids = self.clients.keys()
         for cid in cids:
@@ -175,9 +167,7 @@ class BroadcastServerFactory(WebSocketServerFactory):
             self.rooms[room]['owner'] = client_id
             self.rooms[room]['name'] = room
             self.rooms[room]['members'] = []
-            #self.rooms[room]['members'].append(client_id)
             self.timers[room] = dict()
-            #self.timers[room]['timer'] = threading.Timer(10,self.close_room,args=[room])
             self.timers[room]['timer'] = TimerReset(ROOM_TIMEOUT_VALUE,self.close_room,args=[room])
             self.timers[room]['timer'].start()
             self.send_room_list()
@@ -204,6 +194,7 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
     def enter_room(self,client_id,room_name):
         room = self.rooms[room_name]
+        self.clients[client_id]['room'] = room_name
         if client_id not in room['members']:
             room['members'].append(client_id)
             send_payload = {
@@ -224,6 +215,7 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
     def exit_room(self,client_id,room_name):
         room = self.rooms[room_name]
+        self.clients[client_id]['room'] = None
         if client_id in room['members']:
             send_payload = {
                 'type' : 'room_exit',
@@ -231,25 +223,25 @@ class BroadcastServerFactory(WebSocketServerFactory):
                 'name' : room_name,
                 'members' : [ { 'id' : memb ,'name':self.clients[memb]['name'] } for memb in room['members']]
             }
+            print('send_payload', send_payload)
             self.send_room(room,send_payload)
             #Now remove the member
             room['members'].remove(client_id)
 
-
-
     def close_room(self,room_name):
         print('Closing Room: ', room_name)
-        #Message the users in the room to make it exit
-        room = self.rooms[room_name]
-        print('Room members are ', room['members'])
-        for client_id in room['members']:
-            send_payload = {
-                'type' : 'destroy_room',
-            }
-            self.send_room(room,send_payload)
-        del self.rooms[room_name]
-        del self.timers[room_name]
-        self.send_room_list()
+        if room_name in self.rooms.keys():
+            #Message the users in the room to make it exit
+            room = self.rooms[room_name]
+            print('Room members are ', room['members'])
+            for client_id in room['members']:
+                send_payload = {
+                    'type' : 'destroy_room',
+                }
+                self.send_room(room,send_payload)
+            del self.rooms[room_name]
+            del self.timers[room_name]
+            self.send_room_list()
 
 
 if __name__ == "__main__":
