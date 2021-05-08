@@ -1,4 +1,4 @@
-import sys, redis, uuid,json,ast, threading
+import sys, redis, uuid,json,ast, threading, hashlib
 
 from twisted.internet import reactor, ssl
 from twisted.web.server import Site
@@ -20,7 +20,8 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
 
     def onMessage(self, payload, isBinary):
         if not isBinary:
-            received_data = ast.literal_eval(payload.decode("utf-8"))
+            #received_data = ast.literal_eval(payload.decode("utf-8"))
+            received_data = json.loads(payload)
             print("msg",received_data)
             if (received_data['type'] == 'broadcast'):
                 #Broadcast message
@@ -46,7 +47,11 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 }
                 self.factory.send_client(received_data['client_id'],json.dumps(send_payload))
             elif received_data['type'] == 'create_room':
-                room_list = self.factory.create_room(received_data['client_id'],received_data['name'])
+                room_list = self.factory.create_room(received_data['client_id'],
+                                                    received_data['name'],
+                                                    received_data['secure'],
+                                                    received_data['password']
+                )
             elif received_data['type'] == 'name':
                 self.factory.set_name(received_data['client_id'],received_data['name'])
                 send_payload = {
@@ -151,13 +156,17 @@ class BroadcastServerFactory(WebSocketServerFactory):
         print('set name',self.clients)
         self.clients[client_id]['name'] = name
 
-    def create_room(self,client_id,room):
+    def create_room(self,client_id,room,secure,password):
+        hash = hashlib.sha256()
+        hash.update(bytes(password, encoding='utf-8'))
         rooms = self.rooms.keys()
         if room not in rooms:
             self.rooms[room] = dict()
             self.rooms[room]['owner'] = client_id
             self.rooms[room]['name'] = room
             self.rooms[room]['members'] = []
+            self.rooms[room]['secure'] = secure
+            self.rooms[room]['password'] = hash
             self.timers[room] = dict()
             self.timers[room]['timer'] = TimerReset(ROOM_TIMEOUT_VALUE,self.close_room,args=[room])
             self.timers[room]['timer'].start()
@@ -172,10 +181,20 @@ class BroadcastServerFactory(WebSocketServerFactory):
 
     def send_room_list(self):
             room_list = [ self.rooms[k] for k in self.rooms.keys()]
+            #Extract values
+            room_list_payload = []
+            for r in room_list:
+                room_data = dict()
+                room_data['owner'] = r['owner']
+                room_data['name'] = r['name']
+                room_data['members'] = r['members']
+                room_data['secure'] = r['secure']
+                room_list_payload.append(room_data)
             send_payload = {
                 'type' : 'room_list',
-                'rooms': json.dumps(room_list)
+                'rooms': json.dumps(room_list_payload)
             }
+            print("SEND ROOMS", send_payload)
             cids = self.clients.keys()
             for cid in cids:
                 try:
