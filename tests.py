@@ -50,6 +50,13 @@ def test_rooms():
     driver.find_element_by_id("Room A").click()
 
 
+def test_room_drop_out():
+    test_rooms()
+    driver.switch_to_window(driver.window_handles[1])
+    driver.execute_script('window.close();')
+
+
+
 def test_room_privatemessage():
     #Create three users
     for i in range(0,2):
@@ -140,3 +147,5 @@ if __name__ == '__main__':
         test_create_room()
     elif sys.argv[1] == 'test_joinandrejoin_room':
         test_joinandrejoin_room()
+    elif sys.argv[1] == 'test_room_drop_out':
+        test_room_drop_out()
