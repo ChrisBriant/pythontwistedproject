@@ -11,6 +11,7 @@ from resettimer import TimerReset
 #The timeout value in seconds to keep a room active
 ROOM_TIMEOUT_VALUE = 300
 
+
 class BroadcastServerProtocol(WebSocketServerProtocol):
     def onOpen(self):
         self.factory.register(self)
@@ -64,7 +65,7 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 #Broadcast room list
                 self.factory.send_room_list()
             elif received_data['type'] == 'enter_room':
-                self.factory.enter_room(received_data['client_id'],received_data['name'])
+                self.factory.enter_room(received_data['client_id'],received_data['name'],received_data['password'])
             elif received_data['type'] == 'exit_room':
                 self.factory.exit_room(received_data['client_id'],received_data['name'])
             elif received_data['type'] == 'message_room':
@@ -88,11 +89,44 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
 
 
 class BroadcastServerFactory(WebSocketServerFactory):
+
     def __init__(self, url):
         WebSocketServerFactory.__init__(self, url)
         self.clients = {}
         self.rooms = {}
         self.timers = {}
+
+
+    #Decorator to determine access for room
+    def allowed_in(func):
+        def wrapper(*args, **kwargs):
+            print("WRAPPER")
+            print('args - ',args)
+            print('kwargs - ',kwargs)
+            #client_id,room_name,password
+            instance = args[0]
+            print("INSTANCE", instance, type(instance))
+            room = instance.rooms[args[2]]
+            #Do security check on room
+            if room['secure']:
+                sent_hash = hashlib.sha256()
+                sent_hash.update(bytes(args[3], encoding='utf-8'))
+                if sent_hash.digest() == room['password'].digest():
+                    allowed_in = True
+                    return func(*args, **kwargs)
+                else:
+                    allowed_in = False
+                    send_payload = {
+                        'type' : 'room_access_denied',
+                        'message' : 'Unable to authenticate'
+                    }
+                    instance.clients[args[1]]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
+            else:
+                allowed_in = True
+                return func(*args, **kwargs)
+            print("ALLOWED", allowed_in)
+            #return func(*args, **kwargs)
+        return wrapper
 
     def register(self, client):
         registered = [self.clients[i] for i in list(self.clients.keys())]
@@ -202,7 +236,41 @@ class BroadcastServerFactory(WebSocketServerFactory):
                 except Exception as e:
                     print(e)
 
-    def enter_room(self,client_id,room_name):
+    # @allowed_in
+    # def enter_room(self,client_id,room_name,password):
+    #     room = self.rooms[room_name]
+    #     #Do security check on room
+    #     if room['secure']:
+    #         sent_hash = hashlib.sha256()
+    #         sent_hash.update(bytes(password, encoding='utf-8'))
+    #         if sent_hash.digest() == room['password'].digest():
+    #             allowed_in = True
+    #         else:
+    #             allowed_in = False
+    #     else:
+    #         allowed_in = True
+    #
+    #     if allowed_in:
+    #         self.clients[client_id]['room'] = room_name
+    #         if client_id not in room['members']:
+    #             room['members'].append(client_id)
+    #             send_payload = {
+    #                 'type' : 'room_entrance',
+    #                 'client': { 'id':client_id, 'name':self.clients[client_id]['name']},
+    #                 'name' : room_name,
+    #                 'members' : [ { 'id' : memb ,'name':self.clients[memb]['name'] } for memb in room['members']]
+    #             }
+    #             self.send_room(room,send_payload)
+    #     else:
+    #         send_payload = {
+    #             'type' : 'room_access_denied',
+    #             'message' : 'Unable to authenticate'
+    #         }
+    #         self.clients[client_id]['client'].sendMessage(json.dumps(send_payload).encode('utf-8'))
+    #
+
+    @allowed_in
+    def enter_room(self,client_id,room_name,password):
         room = self.rooms[room_name]
         self.clients[client_id]['room'] = room_name
         if client_id not in room['members']:
@@ -214,6 +282,9 @@ class BroadcastServerFactory(WebSocketServerFactory):
                 'members' : [ { 'id' : memb ,'name':self.clients[memb]['name'] } for memb in room['members']]
             }
             self.send_room(room,send_payload)
+
+
+
 
     #Send data to a room
     def send_room(self,room,payload):
