@@ -72,13 +72,14 @@ class BroadcastServerProtocol(WebSocketServerProtocol):
                 #Update timer
                 if received_data['name'] in self.factory.rooms.keys():
                     self.factory.timers[received_data['name']]['timer'].reset()
-                    send_payload = {
-                        'type' : 'room_message',
-                        'client': { 'id':received_data['client_id'] , 'name':self.factory.clients[received_data['client_id']]['name']},
-                        'message':  received_data['message']
-                    }
-                    room = self.factory.rooms[received_data['name']]
-                    self.factory.send_room(room,send_payload)
+                    self.factory.message_room(received_data['client_id'],received_data['name'],received_data['password'],received_data['message'])
+                    # send_payload = {
+                    #     'type' : 'room_message',
+                    #     'client': { 'id':received_data['client_id'] , 'name':self.factory.clients[received_data['client_id']]['name']},
+                    #     'message':  received_data['message']
+                    # }
+                    # room = self.factory.rooms[received_data['name']]
+                    # self.factory.send_room(room,send_payload)
 
 
 
@@ -284,7 +285,16 @@ class BroadcastServerFactory(WebSocketServerFactory):
             self.send_room(room,send_payload)
 
 
-
+    @allowed_in
+    def message_room(self,client_id,room_name,password,message):
+        room = self.rooms[room_name]
+        #room['members'].append(client_id)
+        send_payload = {
+            'type' : 'room_message',
+            'client': { 'id': client_id, 'name':self.clients[client_id]['name']},
+            'message':  message
+        }
+        self.send_room(room,send_payload)
 
     #Send data to a room
     def send_room(self,room,payload):
